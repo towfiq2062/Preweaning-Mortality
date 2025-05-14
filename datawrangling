@@ -1,0 +1,656 @@
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+df<-read.csv(file = "wo100pm1.csv")
+
+
+# Libraries
+library("ggplot2")
+library("dplyr")
+library(multcomp)
+library(emmeans)
+library(dplyr)
+
+
+theme_afs_point <- function(base_size = 14, base_family = "serif") {
+  theme_classic(base_size = base_size, base_family = base_family) %+replace%
+    theme(axis.title.y = element_text(size = 14, angle = 90, colour = "black"),
+          axis.title.x = element_text(size = 14, colour = "black"),
+          plot.title = element_text(face = "bold", family = "Arial"),
+          legend.position = c(0.3, 0.85),
+          legend.text = element_text(size = 12),
+          plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"),
+          axis.ticks.y = element_line(size = 0.5),
+          axis.ticks.x = element_line(size = 0.5),
+          axis.ticks.length = unit(0.2, "cm"),
+          axis.text.y = element_text(colour = "black", size = 14, angle = 0, vjust = 0.5, hjust = 1),
+          axis.text.x = element_text(colour = "black", size = 14, angle = 0, vjust = 0, hjust = 0.5),
+          axis.line = element_line(colour = "black", size = 0.5, lineend = "square")
+    )
+}
+
+
+
+
+df$Parity = as.factor(df$Parity)
+df$Season = as.factor(df$Season)
+df$Location = as.factor(df$Location)
+df$Diagnosis = as.factor(df$Diagnosis)
+df$LitterLine = as.factor(df$LitterLine)
+df$C_Location = as.factor(df$C_Location)
+
+#df$GestationLength = as.factor(df$GestationLength)
+df$Bwcat = as.factor(df$Bwcat)
+
+
+
+
+#Plotting
+
+
+df %>% 
+  ggplot(aes(x = LitterLine, y = P_mortality, color = Season)) +
+  geom_point() +   facet_grid(rows = vars(Parity), cols = vars(Diagnostic)) 
+df %>% 
+  ggplot(aes(x = P_mortality, y = MeanBirthWeight)) +
+  geom_point() 
+
+
+#Litter line
+#win.graph(width = 12, height = 6, pointsize = 10)
+Landr<-df%>%
+  filter(df$LitterLine=="124")
+Yorks<-df%>%
+  filter(df$LitterLine=="125")
+
+La<-ggplot(Landr, aes(x=P_mortality))+labs(y="Piglets landrace sired",x="Percent mortality")+ 
+  geom_histogram()+
+  theme_afs_point()
+La
+Yo<-ggplot(Yorks, aes(x=P_mortality))+labs(y="Piglets yorkshire sired", x="Percent mortality")+
+  geom_histogram()+
+  theme_afs_point()
+Yo
+grid.arrange(La, Yo, nrow = 1)
+
+
+# Parity wise Mean birth weight
+
+
+ggplot(df, aes(x=Parity, y=MeanBirthWeight)) +labs(y="Mean birth weight", x="Parity")+
+  geom_point()+
+  geom_boxplot()+theme_afs_point()
+ggplot(df, aes(x=Parity, y=Numberbornalive)) +labs(y="Number born alive", x="Parity")+
+  geom_point()+
+  geom_boxplot()+theme_afs_point()
+
+# BW class with Number born alive 
+
+df$Bwcat <- factor(df$Bwcat , levels=c("Light", "Medium", "Heavy"))
+
+
+win.graph(width = 8, height = 8, pointsize = 10)
+b1<-ggplot(df, aes(x=Bwcat, y=Numberbornalive)) +labs(y="Number born alive", x="Mean birth weight class", tag = "(a)")+
+  #geom_point()+
+  geom_boxplot(notch = TRUE)+theme_afs_point()
+b2<-ggplot(df, aes(x=Parity, y=Numberbornalive)) +labs(y="Number born alive", x="Parity", tag = "(b)")+
+  #geom_point()+
+  geom_boxplot(notch = TRUE)+theme_afs_point()
+b3<-ggplot(df, aes(x=Bwcat, y=TotalDeath)) +labs(y="Number of dead piglets", x="Mean birth weight class", tag = "(c)")+
+  #geom_point()+
+  geom_boxplot(notch = TRUE)+theme_afs_point()
+b4<-ggplot(df, aes(x=Parity, y=TotalDeath)) +labs(y="Number of dead piglets", x="Parity", tag = "(d)")+
+  #geom_point()+
+  geom_boxplot(notch = TRUE)+theme_afs_point()
+library(gridExtra)
+grid.arrange(b1, b2,b3,b4, nrow = (2))
+
+
+
+
+
+#Need to know Catagorywise BW and Numb. born
+contrasts(df$Parity) <- c(-.25,-0.25,.25,.25)
+contrasts(df$LitterLine) <- c(-0.5,.5)
+contrasts(df$Diagnosis) <- c(-0.5,.5)
+
+lm2 <- lm(MeanBirthWeight ~ Numberbornalive, data = df)
+summary(lm2)
+tab_model(lm2)
+confint(lm2, "Numberbornalive", level = 0.95)
+
+
+lm3 <- lm(Numberbornalive~Parity, data = df)
+summary(lm3)
+tab_model(lm3)
+
+
+
+
+# Need to see if there is any effects on MBW for parity and Born alive
+
+lm1<-lm(MeanBirthWeight~Parity, data=df)
+summary(lm1)
+
+library(sjPlot)
+library(lme4)
+#124 for Landrace-sired and 125 for Yorkshire-sired
+
+# LM
+hist(df$Numberbornalive)
+lm1=lm(P_overlays~MeanBirthWeight+Sow_resp+Diagnosis,data=df)
+summary(lm1)
+
+#GLM
+g1 <- glm(P_mortality ~  Sow_resp+MeanBirthWeight+GestationLength+NumberStillborns+
+            Parity+ Diagnosis + LitterLine +Season + C_Location  ,family = binomial(link = "logit"),data = df)
+
+summary(g1)
+coef_table <- data.frame(Coefficient = round(coef(g1), 2), 
+                         "Std. Error" = round(summary(g1)$coefficients[, "Std. Error"], 2),
+                         "z-value" = round(summary(g1)$coefficients[, "z value"], 2),
+                         "p-value" = formatC(summary(g1)$coefficients[, "Pr(>|z|)"],  digits = 3))
+# Print the table
+print(coef_table)
+tab_model(g1)
+anova(g1, test="Chisq")
+
+
+
+
+
+
+
+
+
+
+
+df %>%
+  group_by(Parity) %>%
+  summarize(
+    n = n(),
+    mean_litter_size = mean(Sow_resp),
+    mean_birth_weight = mean(MeanBirthWeight),
+    mean_stillborns = mean(NumberStillborns),
+    mean_gestation_length = mean(GestationLength),
+    mean_Total_death = mean(TotalDeath),
+    mean_mortality = mean(P_mortality),
+    mean_overlays = mean(P_overlays),
+    sd_litter_size = sd(Sow_resp),
+    sd_birth_weight = sd(MeanBirthWeight),
+    sd_stillborns = sd(NumberStillborns),
+    sd_gestation_length = sd(GestationLength),
+    sd_Total_death = sd(TotalDeath),
+    sd_mortality = sd(P_mortality),
+    sd_overlays = sd(P_overlays)
+  )
+
+###########################################################
+library(dplyr)
+
+# Perform Kruskal-Wallis test on various variables by Parity group
+kruskal.test(Sow_resp ~ Parity, data = df)
+kruskal.test(Numberbornalive ~ Parity, data = df)
+kruskal.test(MeanBirthWeight ~ Parity, data = df)
+kruskal.test(GestationLength ~ Parity, data = df)
+kruskal.test(NumberStillborns ~ Parity, data = df)
+kruskal.test(TotalDeath ~ Parity, data = df)
+kruskal.test(P_mortality ~ Parity, data = df)
+kruskal.test(P_overlays ~ Parity, data = df)
+
+
+# Load required packages
+library(dunn.test)
+# Post-hoc tests for all variables by parity group using the Dunn test
+dunn.test(df$Sow_resp, df$Parity, method = "bonferroni")
+dunn.test(df$Numberbornalive, df$Parity, method = "bonferroni")
+dunn.test(df$MeanBirthWeight, df$Parity, method = "bonferroni")
+dunn.test(df$GestationLength, df$Parity, method = "bonferroni")
+dunn.test(df$NumberStillborns, df$Parity, method = "bonferroni")
+dunn.test(df$TotalDeath, df$Parity, method = "bonferroni")
+dunn.test(df$P_mortality, df$Parity, method = "bonferroni")
+dunn.test(df$P_overlays, df$Parity, method = "bonferroni")
+
+#######################################################
+
+
+
+
+
+#anova
+
+df %>%
+  group_by(Parity) %>%
+  summarise(
+    Sow_resp_mean = mean(Sow_resp),
+    Sow_resp_sd = sd(Sow_resp),
+    Numberbornalive_mean = mean(Numberbornalive),
+    Numberbornalive_sd = sd(Numberbornalive),
+    MeanBirthWeight_mean = mean(MeanBirthWeight),
+    MeanBirthWeight_sd = sd(MeanBirthWeight),
+    Gestationlength_mean = mean(GestationLength),
+    Gestationlength_sd = sd(GestationLength),
+    NumberStillborns_mean = mean(NumberStillborns),
+    NumberStillborns_sd = sd(NumberStillborns),
+    TotalDeath_mean = mean(TotalDeath),
+    TotalDeath_sd = sd(TotalDeath),
+    P_mortality_mean = mean(P_mortality),
+    P_mortality_sd = sd(P_mortality),
+    P_overlays_mean = mean(P_overlays),
+    P_overlays_sd = sd(P_overlays))
+
+
+
+# One-way ANOVA for each variable
+anova_Sow_resp <- aov(Sow_resp ~ Parity, data = df)
+anova_Numberbornalive <- aov(Numberbornalive ~ Parity, data = df)
+anova_MeanBirthweight <- aov(MeanBirthWeight ~ Parity, data = df)
+anova_Gestationlength <- aov(GestationLength ~ Parity, data = df)
+anova_NumberStillborns <- aov(NumberStillborns ~ Parity, data = df)
+anova_TotalDeath <- aov(TotalDeath ~ Parity, data = df)
+anova_P_mortality <- aov(P_mortality ~ Parity, data = df)
+anova_P_overlays <- aov(P_overlays ~ Parity, data = df)
+
+# Post-hoc tests for each variable
+posthoc_Sow_resp <- TukeyHSD(anova_Sow_resp)
+posthoc_Numberbornalive <- TukeyHSD(anova_Numberbornalive)
+posthoc_MeanBirthweight <- TukeyHSD(anova_MeanBirthweight)
+posthoc_Gestationlength <- TukeyHSD(anova_Gestationlength)
+posthoc_NumberStillborns <- TukeyHSD(anova_NumberStillborns)
+posthoc_TotalDeath <- TukeyHSD(anova_TotalDeath)
+posthoc_P_mortality <- TukeyHSD(anova_P_mortality)
+posthoc_P_overlays <- TukeyHSD(anova_P_overlays)
+
+
+# Print ANOVA results and post-hoc tests
+print(summary(anova_Sow_resp))
+print(posthoc_Sow_resp)
+
+print(summary(anova_Numberbornalive))
+print(posthoc_Numberbornalive)
+
+print(summary(anova_MeanBirthweight))
+print(posthoc_MeanBirthweight)
+
+print(summary(anova_Gestationlength))
+print(posthoc_Gestationlength)
+
+print(summary(anova_NumberStillborns))
+print(posthoc_NumberStillborns)
+
+print(summary(anova_TotalDeath))
+print(posthoc_TotalDeath)
+
+print(summary(anova_P_mortality))
+print(posthoc_P_mortality)
+
+print(summary(anova_P_overlays))
+print(posthoc_P_overlays)
+################################################)
+# Parity-wise means and standard deviations
+df_means <- df %>%
+  group_by(Parity) %>%
+  summarise(
+    Sow_resp_mean = mean(Sow_resp),
+    Sow_resp_sd = sd(Sow_resp),
+    Numberbornalive_mean = mean(Numberbornalive),
+    Numberbornalive_sd = sd(Numberbornalive),
+    MeanBirthWeight_mean = mean(MeanBirthWeight),
+    MeanBirthWeight_sd = sd(MeanBirthWeight),
+    Gestationlength_mean = mean(GestationLength),
+    Gestationlength_sd = sd(GestationLength),
+    NumberStillborns_mean = mean(NumberStillborns),
+    NumberStillborns_sd = sd(NumberStillborns),
+    TotalDeath_mean = mean(TotalDeath),
+    TotalDeath_sd = sd(TotalDeath),
+    P_mortality_mean = mean(P_mortality),
+    P_mortality_sd = sd(P_mortality),
+    P_overlays_mean = mean(P_overlays),
+    P_overlays_sd = sd(P_overlays)
+  )
+
+# One-way ANOVA for each variable
+anova_Sow_resp <- aov(Sow_resp ~ Parity, data = df)
+anova_Numberbornalive <- aov(Numberbornalive ~ Parity, data = df)
+anova_MeanBirthWeight <- aov(MeanBirthWeight ~ Parity, data = df)
+anova_Gestationlength <- aov(GestationLength ~ Parity, data = df)
+anova_NumberStillborns <- aov(NumberStillborns ~ Parity, data = df)
+anova_TotalDeath <- aov(TotalDeath ~ Parity, data = df)
+anova_P_mortality <- aov(P_mortality ~ Parity, data = df)
+anova_P_overlays <- aov(P_overlays ~ Parity, data = df)
+
+# Post-hoc tests for each variable
+posthoc_Sow_resp <- TukeyHSD(anova_Sow_resp)
+posthoc_Numberbornalive <- TukeyHSD(anova_Numberbornalive)
+posthoc_MeanBirthWeight <- TukeyHSD(anova_MeanBirthWeight)
+posthoc_Gestationlength <- TukeyHSD(anova_Gestationlength)
+posthoc_NumberStillborns <- TukeyHSD(anova_NumberStillborns)
+posthoc_TotalDeath <- TukeyHSD(anova_TotalDeath)
+posthoc_P_mortality <- TukeyHSD(anova_P_mortality)
+posthoc_P_overlays <- TukeyHSD(anova_P_overlays)
+
+
+# Print results
+print(df_means)
+print(summary(anova_Sow_resp))
+print(posthoc_Sow_resp)
+print(summary(anova_Numberbornalive))
+print(posthoc_Numberbornalive)
+print(summary(anova_MeanBirthWeight))
+print(posthoc_MeanBirthWeight)
+print(summary(anova_Gestationlength))
+print(posthoc_Gestationlength)
+print(summary(anova_NumberStillborns))
+print(posthoc_NumberStillborns)
+print(summary(anova_TotalDeath))
+print(posthoc_TotalDeath)
+print(summary(anova_P_mortality))
+print(posthoc_P_mortality)
+print(summary(anova_P_overlays))
+print(posthoc_P_overlays)
+
+
+
+library(broom)
+library(dplyr)
+
+# Convert ANOVA tables to data frames
+anova_Sow_resp_tbl <- tidy(anova_Sow_resp)
+anova_Numberbornalive_tbl <- tidy(anova_Numberbornalive)
+anova_MeanBirthWeight_tbl <- tidy(anova_MeanBirthWeight)
+anova_Gestationlength_tbl <- tidy(anova_Gestationlength)
+anova_NumberStillborns_tbl <- tidy(anova_NumberStillborns)
+anova_TotalDeath_tbl <- tidy(anova_TotalDeath)
+anova_P_mortality_tbl <- tidy(anova_P_mortality)
+anova_P_overlays_tbl <- tidy(anova_P_overlays)
+
+# Merge tables
+table <- df_means %>%
+  left_join(anova_Sow_resp_tbl, by = "Parity") %>%
+  left_join(anova_Numberbornalive_tbl, by = "Parity") %>%
+  left_join(anova_MeanBirthWeight_tbl, by = "Parity") %>%
+  left_join(anova_Gestationlength_tbl, by = "Parity") %>%
+  left_join(anova_NumberStillborns_tbl, by = "Parity") %>%
+  left_join(anova_TotalDeath_tbl, by = "Parity") %>%
+  left_join(anova_P_mortality_tbl, by = "Parity") %>%
+  left_join(anova_P_overlays_tbl, by = "Parity")
+
+
+# Print table
+print(table)
+
+
+
+
+
+
+
+
+# Kruskal-Wallis test
+kruskal_table <- df %>%
+  group_by(variable) %>%
+  summarize(kruskal_p_value = round(kruskal.test(value ~ Parity, data = .)$p.value, 3)) %>%
+  mutate(test_result = ifelse(kruskal_p_value < 0.05, "Significant", "Not significant"))
+
+# Dunn's test
+dunn_table <- bind_rows(
+  dunn.test(df$Sow_resp, df$Parity, method = "bonferroni"),
+  dunn.test(df$Numberbornalive, df$Parity, method = "bonferroni"),
+  dunn.test(df$MeanBirthWeight, df$Parity, method = "bonferroni"),
+  dunn.test(df$GestationLength, df$Parity, method = "bonferroni"),
+  dunn.test(df$NumberStillborns, df$Parity, method = "bonferroni"),
+  dunn.test(df$TotalDeath, df$Parity, method = "bonferroni"),
+  dunn.test(df$P_mortality, df$Parity, method = "bonferroni"),
+  dunn.test(df$P_overlays, df$Parity, method = "bonferroni")
+) %>%
+  mutate(
+    variable = gsub("df\\$", "", as.character(as.name(variable))),
+    test_result = ifelse(as.numeric(as.character(p.value)) < 0.05, "Significant", "Not significant"),
+    p.adj = round(p.adj, 3)
+  ) %>%
+  select(variable, group1, group2, test_result, p.adj)
+
+# Combine tables
+summary_table <- full_join(kruskal_table, dunn_table, by = "variable") %>%
+  select(variable, kruskal_p_value, test_result.x, group1, group2, test_result.y, p.adj)
+
+# Format table
+summary_table %>%
+  kable("html") %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, bold = TRUE) %>%
+  column_spec(c(2, 3, 6), width = "100px") %>%
+  column_spec(c(4, 5), width = "70px") %>%
+  collapse_rows(columns = 1, valign = "middle")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ggplot(df, aes(x = Parity, y = Sow_resp)) +
+  geom_boxplot()
+
+ggplot(df, aes(x = Parity, y = MeanBirthWeight)) +
+  geom_boxplot()
+
+ggplot(df, aes(x = Parity, y = GestationLength)) +
+  geom_boxplot()
+
+ggplot(df, aes(x = Parity, y = NumberStillborns)) +
+  geom_boxplot()
+
+ggplot(df, aes(x = Sow_resp)) +
+  geom_histogram() +
+  facet_wrap(~Parity)
+
+ggplot(df, aes(x = MeanBirthWeight)) +
+  geom_histogram() +
+  facet_wrap(~Parity)
+
+ggplot(df, aes(x = GestationLength)) +
+  geom_histogram() +
+  facet_wrap(~Parity)
+
+ggplot(df, aes(x = NumberStillborns)) +
+  geom_histogram() +
+  facet_wrap(~Parity)
+
+
+
+library(tidyverse)
+
+# Conduct ANOVA for each continuous variable
+anova_Sow_resp <- aov(Sow_resp ~ Parity, data = df)
+anova_Born_alive <- aov(Numberbornalive ~ Parity, data = df)
+anova_Total_death <- aov(TotalDeath ~ Parity, data = df)
+anova_MeanBirthWeight <- aov(MeanBirthWeight ~ Parity, data = df)
+anova_GestationLength <- aov(GestationLength ~ Parity, data = df)
+
+# Conduct Kruskal-Wallis test for stillborns
+kruskal_stillborns <- kruskal.test(NumberStillborns ~ Parity, data = df)
+
+# Create a data frame with results from each analysis
+results <- data.frame(
+  variable = c("Litter Size", "Born Alive", "Total Death", "Mean Birth Weight", "Gestation Length", "Stillborns"),
+  test = c("One-Way ANOVA", "One-Way ANOVA", "One-Way ANOVA", "One-Way ANOVA", "One-Way ANOVA", "Kruskal-Wallis"),
+  p_value = c(summary(anova_Sow_resp)[[1]][["Pr(>F)"]], summary(anova_Born_alive)[[1]][["Pr(>F)"]], 
+              summary(anova_Total_death)[[1]][["Pr(>F)"]], summary(anova_MeanBirthWeight)[[1]][["Pr(>F)"]], 
+              summary(anova_GestationLength)[[1]][["Pr(>F)"]], kruskal_stillborns$p.value),
+  posthoc = c(paste(TukeyHSD(anova_Sow_resp)$'Parity'[ ,4], collapse = ", "),
+              paste(TukeyHSD(anova_Born_alive)$'Parity'[ ,4], collapse = ", "),
+              paste(TukeyHSD(anova_Total_death)$'Parity'[ ,4], collapse = ", "),
+              paste(TukeyHSD(anova_MeanBirthWeight)$'Parity'[ ,4], collapse = ", "),
+              paste(TukeyHSD(anova_GestationLength)$'Parity'[ ,4], collapse = ", "),
+              paste(pairwise.wilcox.test(df$Numberbornalive, df$Parity, p.adjust.method = "bonferroni")$p.value, collapse = ", ")),
+  stringsAsFactors = FALSE
+)
+
+# Print the table
+results
+
+
+
+
+
+g1 <- glm(P_mortality ~  
+            Sow_resp+MeanBirthWeight+NumberStillborns+GestationLength
+            #          Parity+ Diagnosis + LitterLine +Season + C_Location
+          , family = poisson(link = "log"),data = dfp1)
+
+summary(g1)
+coef_table <- data.frame(Coefficient = round(coef(g1), 2), 
+                         "Std. Error" = round(summary(g1)$coefficients[, "Std. Error"], 2),
+                         "z-value" = round(summary(g1)$coefficients[, "z value"], 2),
+                         "p-value" = formatC(summary(g1)$coefficients[, "Pr(>|z|)"],  digits = 3))
+# Print the table
+print(coef_table)
+tab_model(g1)
+
+
+ggplot(df, aes(x = P_mortality)) + geom_density() + 
+  xlab("Response Variable") + ylab("Density") + ggtitle("Density Plot of Response Variable")
+# Overlay a Normal distribution
+mu <- mean(df$P_mortality)
+sigma <- sd(df$P_mortality)
+curve(dnorm(x, mean = mu, sd = sigma), add = TRUE, col = "red")
+
+
+
+
+# load package
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+
+tab_model(g1)
+
+
+
+
+CLD = cld(marginal,
+          alpha=0.05,
+          Letters=letters,
+          adjust="tukey")
+
+
+
+
+ggplot(df, aes(x=LitterLine, y=P_overlays)) + 
+  geom_boxplot(outlier.colour="red", outlier.shape=8,
+               outlier.size=4)+
+  theme_afs_point()
+
+
+#Linear model for MBW and Born alive
+
+lm1 <- lm(MeanBirthWeight ~ Numberbornalive, data = data1)
+summary(lm1)
+win.graph(width = 7, height = 7, pointsize = 10)
+qplot(data1$Numberbornalive, data1$MeanBirthWeight , xlab = "Litter Size",
+      ylab = "Mean birth weight (kg)")+
+  theme_afs_point()+
+  stat_poly_line() +
+  stat_poly_eq(aes(label = after_stat(eq.label))) +
+  stat_poly_eq(label.y = 0.9) +
+  geom_point()+
+  #geom_smooth()+
+  geom_smooth(method = "lm", se=FALSE, 
+              color="black", formula = y ~ x) +geom_point()
+
+
+win.graph(width = 7, height = 7, pointsize = 10)
+BWm<-qplot(df$BWcat,df$P_mortality,  xlab = "Mean birth weight",
+           ylab ="Percent mortality, %" )+
+  theme_afs_point()+
+  # stat_poly_line() +
+  # stat_poly_eq(aes(label = after_stat(eq.label))) +
+  # stat_poly_eq(label.y = 0.9) +
+  # geom_point()+
+  # #geom_smooth()+
+  # geom_smooth(method = "lm", se=FALSE, 
+  #             color="black", formula = y ~ x) +geom_point()+
+  
+geom_boxplot(outlier.colour="black", outlier.shape=16,
+               outlier.size=2, notch=FALSE)
+
+BWo<-qplot(data1$BWcat,data1$P_overlays,  xlab = "Mean birth weight",
+           ylab ="Percent overlays, %" )+
+  theme_afs_point()+
+  # stat_poly_line() +
+  # stat_poly_eq(aes(label = after_stat(eq.label))) +
+  # stat_poly_eq(label.y = 0.9) +
+  # geom_point()+
+  # #geom_smooth()+
+  # geom_smooth(method = "lm", se=FALSE, 
+  #             color="black", formula = y ~ x) +geom_point()+
+  
+  geom_boxplot(outlier.colour="black", outlier.shape=16,
+               outlier.size=2, notch=FALSE)
+
+
+LSm<-qplot(data1$BWcat,data1$P_mortality,  xlab = "Mean birth weight",
+           ylab ="Percent mortality, %" )+
+  theme_afs_point()+
+  # stat_poly_line() +
+  # stat_poly_eq(aes(label = after_stat(eq.label))) +
+  # stat_poly_eq(label.y = 0.9) +
+  # geom_point()+
+  # #geom_smooth()+
+  # geom_smooth(method = "lm", se=FALSE, 
+  #             color="black", formula = y ~ x) +geom_point()+
+  
+  geom_boxplot(outlier.colour="black", outlier.shape=16,
+               outlier.size=2, notch=FALSE)
+
+
+
+library(lsmeans)
+
+
+
+
+
+
+#GLM
+
+lm1 <- glm(P_mortality ~ BWcat+ Parity+ Location+ C_Location+GestationLength+ LitterLine+ Diagnosis+Diagnosis+Sow_resp, data = data1)
+summary(lm1)
+lsmeans(lm1, ~ BWcat)
+
+
+lm2 <- glm(P_mortality ~ BWcat, data = data1)
+summary(lm2)
+
+
+old.par = par(mfrow=c(2,2))
+plot(gala.1)
+par(old.par)
+
+summary(data1)
+
+hist(x=data1$TotalDeath)
+df$Par
+
