@@ -1,0 +1,406 @@
+#This code is to compare 3 model form mortality and Overlays by ----Towfiq
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+#setwd('C:/Users/mrahman8/My Drive/0. UNL STUDY/STAT801A/R/Datasets/SOW/RF')
+data1 <- read.csv(file = "wo100pm1.csv")
+#head(data1)
+library(dplyr)
+data1 = data1 %>% mutate(Diagnosis = case_when(Diagnosis == "Healthy" ~ 1,
+                                               Diagnosis == "Unhealthy" ~ 0,))
+data1$Location = as.factor(data1$Location)
+data1$LitterLine = as.factor(data1$LitterLine)
+data1$Diagnosis = as.factor(data1$Diagnosis)
+data1$Season = as.factor(data1$Season)
+data1$Parity= as.factor(data1$Parity)
+data1$BWcat= as.factor(data1$Bwcat)
+
+library(randomForest)
+#Mortality
+rf1 = randomForest(P_mortality ~ Parity + Location + Season 
+                   +GestationLength+ LitterLine+ MeanBirthWeight+
+                     Diagnosis+ Sow_resp,
+                   data = data1, importance = T, mtry = 3)
+#Parity + Location + Year + Season + GestationLength + 
+#LitterLine + MeanBirthWeight + Diagnosis,
+
+
+rf1.pred = predict(rf1, newdata = data1[,2:18])
+
+
+
+# Overlays
+rf2 = randomForest(P_overlays ~ Parity + Location + Season 
+                   +GestationLength+ LitterLine+ MeanBirthWeight+
+                     Diagnosis+ Sow_resp,
+                   data = data1, importance = T, mtry = 3)
+
+rf2.pred = predict(rf2, newdata = data1[,2:18])
+
+
+
+
+
+##################################################################
+#Binomial model
+
+# 
+# install.packages('glmulti')
+# install.packages('rJava')
+library("dplyr")
+library("ggpubr")
+library("ggplot2")
+# library(glmulti)
+# library('rJava')
+# Sys.setenv(JAVA_HOME="")
+#
+
+
+
+#searching best models
+# model.search= glmulti(y = P_mortality ~  Parity + Location + Season 
+#                       +GestationLength+ LitterLine+ MeanBirthWeight+
+#                         Diagnosis+ Sow_resp,
+#                       data = data1,
+#                       fitfunction = "glm", level = 1, method = "g", crit = "aicc",
+#                       family = binomial(link ="logit"))
+
+ # best.glm = glm(P_mortality ~ 1 + GestationLength + MeanBirthWeight +
+ #                  Sow_resp+ Diagnosis, data = data1, 
+ #                family =binomial(link ="logit") )
+
+
+
+best.glm1 = glm(P_mortality ~ 1 + Parity + Location + Season 
+                                      +GestationLength+ LitterLine+ MeanBirthWeight+
+                                        Diagnosis+ Sow_resp, data = data1, 
+               family =binomial(link ="logit") )
+
+glm.pred1 = predict(best.glm1, newdata = data1[,2:15])
+
+
+
+
+#Overlays BEta
+
+
+best.glm2 = glm(P_overlays ~ 1 + Parity + Location + Season 
+                +GestationLength+ LitterLine+ MeanBirthWeight+
+                  Diagnosis+ Sow_resp, data = data1, 
+                family =binomial(link ="logit") )
+
+glm.pred2 = predict(best.glm2, newdata = data1[,2:15])
+
+
+
+
+############################################################
+#beta reg:
+
+
+# install_version("MuMln", "1.47.1")
+# library('MuMln')
+library(betareg)
+
+# all.parm = betareg(P_overlays ~ Parity + Location + Season_n 
+#                    +GestationLength+ LitterLine+ MeanBirthWeight+
+#                      Diagnosis+ Sow_resp, 
+#                    data = data1, na.action = "na.fail")
+# 
+# model.search1 = dredge(all.parm)
+# 
+
+
+
+betareg1 = betareg(P_mortality ~ 1 + Location+ Season+ GestationLength 
+                    + MeanBirthWeight + Diagnosis + Parity
+                    , data = data1)
+
+betareg.pred1 = predict(betareg1, newdata = data1[,2:15])
+
+
+
+
+
+#overlays Beta reg
+betareg2 = betareg(P_overlays ~ 1 + Location+ Season+ GestationLength 
+                   + MeanBirthWeight + Diagnosis + Parity
+                   , data = data1)
+
+betareg.pred2 = predict(betareg2, newdata = data1[,2:15])
+
+
+
+
+
+
+
+
+
+
+cor_rf1 = cor(data1$P_mortality, rf1.pred)
+cor_glm1 = cor(data1$P_mortality, glm.pred1)
+cor_breg1 = cor(data1$P_mortality, betareg.pred1)
+
+mse11 = sum((data1$P_mortality - rf1.pred)^2)
+mse21 = sum((data1$P_mortality - glm.pred1)^2)
+mse31 = sum((data1$P_mortality - betareg.pred1)^2)
+results1 = data.frame(Model = c("RF","Binomial", "Beta" ), 
+                     Cor = c(cor_rf1, cor_glm1, cor_breg1), 
+                     MSE = c(mse11, mse21, mse31))
+results1
+
+
+
+#FOr overlays
+
+
+
+cor_rf2 = cor(data1$P_overlays, rf2.pred)
+cor_glm2 = cor(data1$P_overlays, glm.pred2)
+cor_breg2 = cor(data1$P_overlays, betareg.pred2)
+
+mse12 = sum((data1$P_overlays - rf2.pred)^2)
+mse22 = sum((data1$P_overlays - glm.pred2)^2)
+mse32 = sum((data1$P_overlays - betareg.pred2)^2)
+results2 = data.frame(Model = c("RF","Binomial", "Beta" ), 
+                      Cor = c(cor_rf2, cor_glm2, cor_breg2), 
+                      MSE = c(mse12, mse22, mse32))
+results2
+
+
+
+
+glm.pred1=abs(glm.pred1)/10
+glm.pred2=abs(glm.pred2)/10
+betareg.pred2= betareg.pred2*10
+
+#Plotting
+# install.packages("ggplot2")
+library(ggplot2)
+win.graph(width = 12, height = 8, pointsize = 10)
+
+#x="geom_smooth(method = "lm", se=FALSE, color="black", formula = y ~ x) +geom_point()"
+# 
+# lm_eqn <- function(df){
+#   m <- lm(y ~ x, df);
+#   eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2, 
+#                    list(a = format(unname(coef(m)[1]), digits = 2),
+#                         b = format(unname(coef(m)[2]), digits = 2),
+#                         r2 = format(summary(m)$r.squared, digits = 3)))
+#   as.character(as.expression(eq));
+# }
+
+theme_afs_point <- function(base_size = 14, base_family = "serif") {
+  theme_classic(base_size = base_size, base_family = base_family) %+replace%
+    theme(axis.title.y = element_text(size = 14, angle = 90, colour = "black"),
+          axis.title.x = element_text(size = 14, colour = "black"),
+          plot.title = element_text(face = "bold", family = "Arial"),
+          legend.position = c(0.3, 0.85),
+          legend.text = element_text(size = 12),
+          plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"),
+          axis.ticks.y = element_line(size = 0.5),
+          axis.ticks.x = element_line(size = 0.5),
+          axis.ticks.length = unit(0.2, "cm"),
+          axis.text.y = element_text(colour = "black", size = 14, angle = 0, vjust = 0.5, hjust = 1),
+          axis.text.x = element_text(colour = "black", size = 14, angle = 0, vjust = 0, hjust = 0.5),
+          axis.line = element_line(colour = "black", size = 0.5, lineend = "square")
+    )
+}
+
+
+
+
+
+
+library(ggpmisc)
+library(ggpp)
+p11 <- qplot(data1$P_mortality, rf1.pred, xlab = "Measured mortality %",
+             ylab = "Predicted mortality %", xlim = c(0, 0.6),
+             main = "(a)") +
+  stat_poly_line() +
+  stat_poly_eq(aes(label = after_stat(eq.label))) +
+  stat_poly_eq(label.y = 0.9) +
+  geom_point()
+
+
+p12<-qplot(data1$P_overlays, rf2.pred, xlab = "Measured overlays %",
+     ylab = "Predicted  overlays %", xlim= c(0,0.5),
+     main = "(b)")+ theme_afs_point()+
+      
+stat_poly_line() +
+  stat_poly_eq(aes(label = after_stat(eq.label))) +
+  stat_poly_eq(label.y = 0.9) +
+  geom_point()
+
+p21<-qplot(data1$P_mortality, glm.pred1,xlab = "Measured mortality%",
+           ylab = "Predicted mortality %", main = "Binomial Best Model for mortality")+
+theme_afs_point()+
+  
+  stat_poly_line() +
+  stat_poly_eq(aes(label = after_stat(eq.label))) +
+  stat_poly_eq(label.y = 0.9) +
+  geom_point()
+
+p22<-qplot(data1$P_overlays, glm.pred2, xlab = "Measured overlays %",
+           ylab = "Predicted  overlays %",main = "Binomial Best Model for overlays")+
+  theme_afs_point()+
+  
+  stat_poly_line() +
+  stat_poly_eq(aes(label = after_stat(eq.label))) +
+  stat_poly_eq(label.y = 0.9) +
+  geom_point()
+
+p31<-qplot(data1$P_mortality, betareg.pred1, xlab = "Measured mortality%",
+           ylab = "Predicted mortality %",main = "Beta Best Model for mortality")+
+  theme_afs_point()+
+  
+  stat_poly_line() +
+  stat_poly_eq(aes(label = after_stat(eq.label))) +
+  stat_poly_eq(label.y = 0.9) +
+  geom_point()
+
+p32<-qplot(data1$P_overlays, betareg.pred2, xlab = "Measured overlays %",
+           ylab = "Predicted  overlays %",main = "Beta Best Model for P_overlays")+
+  theme_afs_point()+
+  
+  stat_poly_line() +
+  stat_poly_eq(aes(label = after_stat(eq.label))) +
+  stat_poly_eq(label.y = 0.9) +
+  geom_point()
+
+
+
+library(gridExtra)
+grid.arrange(p11,
+             p21,
+             p31,
+             p12,
+             p22,
+             p32, nrow = 2)
+
+
+#Only RF
+win.graph(width = 12, height = 6, pointsize = 10)
+grid.arrange(p11, p12, nrow = 1)
+# grid.text('Predicted',x = 0.05,y = 0.5,gp = gpar(fontsize = 26),rot=90)
+# grid.text('Measured',x = 0.5,y = 0.01,gp = gpar(fontsize = 26))
+
+
+#Variable importance chart
+
+
+
+
+theme_afs_point <- function(base_size = 14, base_family = "serif") {
+  theme_classic(base_size = base_size, base_family = base_family) %+replace%
+    theme(axis.title.y = element_text(size = 14, angle = 90, colour = "black"),
+          axis.title.x = element_text(size = 14, colour = "black"),
+          plot.title = element_text(face = "bold", family = "Arial"),
+          legend.position = c(0.3, 0.85),
+          legend.text = element_text(size = 12),
+          plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), "cm"),
+          axis.ticks.y = element_line(size = 0.5),
+          axis.ticks.x = element_line(size = 0.5),
+          axis.ticks.length = unit(0.2, "cm"),
+          axis.text.y = element_text(colour = "black", size = 14, angle = 0, vjust = 0.5, hjust = 1),
+          axis.text.x = element_text(colour = "black", size = 14, angle = 0, vjust = 0, hjust = 0.5),
+          axis.line = element_line(colour = "black", size = 0.5, lineend = "square")
+    )
+}
+
+
+
+imp <- varImpPlot(rf1) # let's save the varImp object
+
+# this part just creates the data.frame for the plot part
+
+
+library(dplyr)
+imp <- as.data.frame(imp)
+
+imp$varnames <- rownames(imp) # row names to column
+imp$varnames<-c("Parity", "Location", "Season", "Gestation Length",
+                "LitterLine","Mean birth weight", "Diagnosis", "Litter size")
+colnames(imp) <- c('IncMSE','IncNodePurity','varnames')
+rownames(imp) <- NULL  
+imp$var_categ <- rep(1:8) # random var category
+# this is the plot part, be sure to use reorder with the correct measure name
+library(ggplot2) 
+
+c1<-ggplot(imp, aes(x=reorder(varnames,IncMSE), weight=IncMSE,
+                )) +  theme(text = element_text(size = 18,family = "serif")) +
+  geom_bar() +
+  scale_fill_discrete(name="Variable Group") +
+  ylab("MDA") +
+  xlab("Variable Name")+
+  coord_flip()
+#fill=as.factor(imp$varnames)
+#For Overlays
+
+imp2 <- varImpPlot(rf2) # let's save the varImp object
+
+# this part just creates the data.frame for the plot part
+library(dplyr)
+imp2 <- as.data.frame(imp2)
+
+imp2$varnames2 <- rownames(imp2) # row names to column
+imp2$varnames2<-c("Parity", "Location", "Season", "Gestation Length",
+                "LitterLine","Mean birth weight", "Diagnosis", "Litter size")
+colnames(imp2) <- c('IncMSE2','IncNodePurity2','varnames2')
+rownames(imp2) <- NULL  
+imp2$var_categ <- rep(1:8) # random var category
+
+# this is the plot part, be sure to use reorder with the correct measure name
+library(ggplot2) 
+
+c2<-ggplot(imp2, aes(x=reorder(varnames2,IncMSE2), weight=IncMSE2,
+                    )) + theme(text = element_text(size = 18,family = "serif")) +
+  geom_bar() +
+  scale_fill_discrete(name="Variable Group") +
+  ylab("MDA") +
+  xlab("Variable Name")+
+  coord_flip()
+
+######Variable importance dataframe to csv
+
+# 
+# merged_df_varimp <- merge(imp, imp2, by = "var_categ")
+# 
+# print(merged_df_varimp)
+# write.csv(merged_df_varimp, file = "varimp.csv", row.names = FALSE)
+
+
+win.graph(width = 12, height = 6, pointsize = 10)
+figure <- ggarrange(c1, c2,
+                    labels = c("(a)", "(b)"),
+                    ncol = 2, nrow = 1)
+figure
+
+
+#Plotting
+#Nicer version of plot
+win.graph(width = 7, height = 7, pointsize = 10)
+
+
+varimp<-read.csv(file="varimp.csv")
+
+
+x1<-ggplot(varimp, aes(x=reorder(varnames,IncMSE), weight=IncMSE,
+)) + theme(text = element_text(size = 14,family = "serif")) +
+  geom_bar() +
+  scale_fill_discrete(name="Variable Group") +
+  ylab("MDA") +
+  xlab("Variable Name")+
+  coord_flip()
+x2<-ggplot(varimp, aes(x=reorder(varnames2,IncMSE2), weight=IncMSE2,
+)) + theme(text = element_text(size = 14,family = "serif")) +
+  geom_bar() +
+  scale_fill_discrete(name="Variable Group") +
+  ylab("MDA") +
+  xlab("Variable Name")+
+  coord_flip()
+
+figure1 <- ggarrange(x1, x2,
+                    labels = c("(a)", "(b)"),
+                    ncol = 2, nrow = 1)
+figure1
+
